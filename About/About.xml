@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <ModMetaData>
-    <packageId>frenchua.RememberResourceReadout</packageId>
-    <name>Remember Resource Readout</name>
+    <packageId>frenchua.BetterResourceReadout</packageId>
+    <name>Better Resource Readout</name>
     <author>Joshua French</author>
     <modVersion IgnoreIfNoMatchingField="True">0.0.1</modVersion>
     <supportedVersions>

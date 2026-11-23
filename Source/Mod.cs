@@ -6,7 +6,7 @@ namespace RememberResourceReadout;
 
 public class Mod : Verse.Mod {
 
-    public const string HarmonyId = "com.jdfrench.RememberResourceReadout";
+    public const string HarmonyId = "com.jdfrench.BetterResourceReadout";
 
     public static RememberResourceReadoutSettings Settings { get; private set; }
 
