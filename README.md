@@ -29,6 +29,11 @@ versions, stages a clean mod folder (`About/`, `1.6/Assemblies`, `1.7/Assemblies
 and updates the Workshop item named in `About/PublishedFileId.txt`. The workflow can also be
 started by hand from the Actions tab, with an optional changenote.
 
+The workflow downloads Valve's SteamCMD onto the runner and calls `workshop_build_item`
+directly, rather than going through a containerized third-party action. SteamCMD is a
+32-bit binary, and Docker's default seccomp profile on newer runner images breaks 32-bit
+networking, so running it on the host keeps this job working on `ubuntu-latest`.
+
 ## One-time setup
 
 Two repository secrets are needed, both from a Steam account that owns RimWorld and the
