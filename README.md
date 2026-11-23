@@ -29,10 +29,10 @@ versions, stages a clean mod folder (`About/`, `1.6/Assemblies`, `1.7/Assemblies
 and updates the Workshop item named in `About/PublishedFileId.txt`. The workflow can also be
 started by hand from the Actions tab, with an optional changenote.
 
-The workflow downloads Valve's SteamCMD onto the runner and calls `workshop_build_item`
-directly, rather than going through a containerized third-party action. SteamCMD is a
-32-bit binary, and Docker's default seccomp profile on newer runner images breaks 32-bit
-networking, so running it on the host keeps this job working on `ubuntu-latest`.
+The upload itself is done by [frenchua/steam-workshop-upload](https://github.com/frenchua/steam-workshop-upload),
+which runs SteamCMD natively on the runner instead of in a container. SteamCMD is a 32-bit
+binary, and Docker's default seccomp profile on newer runner images breaks 32-bit networking,
+so a containerized uploader fails on `ubuntu-latest`.
 
 ## One-time setup
 

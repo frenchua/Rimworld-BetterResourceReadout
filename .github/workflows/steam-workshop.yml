@@ -21,9 +21,6 @@ concurrency:
   group: steam-workshop
   cancel-in-progress: false
 
-env:
-  STEAM_APP_ID: '294100'
-
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -68,95 +65,15 @@ jobs:
           esac
           echo "publishedFileId=$id" >> "$GITHUB_OUTPUT"
 
-      # SteamCMD runs natively rather than through a containerized action. Docker 29.4.2
-      # (shipped on the ubuntu-26.04 runner image) denies socketcall(2) in its default
-      # seccomp profile, and SteamCMD is a 32-bit binary whose every socket() call goes
-      # through socketcall, so inside a container it dies with "Steamcmd needs to be
-      # online to update". Running on the host avoids container seccomp entirely, which
-      # keeps this job working on ubuntu-latest regardless of the image's Docker version.
-      # See steamcmd/docker#93 and game-ci/steam-deploy#98.
-      - name: Install SteamCMD
-        run: |
-          set -euo pipefail
-
-          # Valve ships SteamCMD as a 32-bit x86 binary. The GitHub runner images carry
-          # the 32-bit runtime already; installing it explicitly means an image that ever
-          # drops i386 fails here with a clear message instead of deep inside SteamCMD.
-          if ! dpkg -s lib32gcc-s1 >/dev/null 2>&1; then
-            sudo dpkg --add-architecture i386
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends lib32gcc-s1
-          fi
-
-          mkdir -p "$RUNNER_TEMP/steamcmd"
-          curl -sSfL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
-            | tar --no-same-owner -xzf - -C "$RUNNER_TEMP/steamcmd"
-
-          # The first run bootstraps and self-updates, and can exit non-zero even when it
-          # succeeded; only a second consecutive failure is treated as fatal.
-          "$RUNNER_TEMP/steamcmd/steamcmd.sh" +quit \
-            || "$RUNNER_TEMP/steamcmd/steamcmd.sh" +quit
-
+      # SteamCMD runs natively on the runner rather than in a container: Docker 29.4.2
+      # on the ubuntu-26.04 image denies socketcall(2) in its default seccomp profile,
+      # which breaks 32-bit SteamCMD's networking entirely. See the action's README.
       - name: Upload to Steam Workshop
-        env:
-          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
-          STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
-          PUBLISHED_FILE_ID: ${{ steps.stage.outputs.publishedFileId }}
-          CHANGE_NOTE: ${{ inputs.changeNote || github.event.head_commit.message }}
-        run: |
-          set -euo pipefail
-          steamcmd="$RUNNER_TEMP/steamcmd/steamcmd.sh"
-
-          test -n "${STEAM_USERNAME:-}" || {
-            echo "::error::STEAM_USERNAME secret is not set"; exit 1; }
-          test -n "${STEAM_CONFIG_VDF:-}" || {
-            echo "::error::STEAM_CONFIG_VDF secret is not set"; exit 1; }
-
-          # Restore the SteamCMD login session so CI never handles the password.
-          install -d -m 700 "$HOME/Steam/config"
-          printf '%s' "$STEAM_CONFIG_VDF" > "$HOME/Steam/config/config.vdf"
-          chmod 600 "$HOME/Steam/config/config.vdf"
-
-          # Confirm the session still works before touching the Workshop item, so an
-          # expired Steam Guard session reads as a login error rather than a failed upload.
-          "$steamcmd" +login "$STEAM_USERNAME" +quit > "$RUNNER_TEMP/login.log" 2>&1 || true
-          cat "$RUNNER_TEMP/login.log"
-          if grep -qiE "FAILED login|Login Failure|Invalid Password" "$RUNNER_TEMP/login.log"; then
-            echo "::error::SteamCMD login failed - the STEAM_CONFIG_VDF session has most likely expired. Regenerate it as described in README.md."
-            exit 1
-          fi
-
-          # VDF strings are double-quoted and cannot span lines, so escape backslashes
-          # and quotes, then fold a multi-line commit message into literal \n escapes.
-          # The replacements come from variables because bash strips backslashes out of
-          # a literal replacement string.
-          bs='\'
-          note=${CHANGE_NOTE//"$bs"/"$bs$bs"}
-          note=${note//'"'/"$bs\""}
-          note=${note//$'\r'/}
-          note=${note//$'\n'/"${bs}n"}
-
-          # workshop_build_item needs an absolute content path.
-          manifest="$RUNNER_TEMP/manifest.vdf"
-          printf '"workshopitem"\n{\n\t"appid" "%s"\n\t"publishedfileid" "%s"\n\t"contentfolder" "%s"\n\t"changenote" "%s"\n}\n' \
-            "$STEAM_APP_ID" "$PUBLISHED_FILE_ID" "$GITHUB_WORKSPACE/staging" "$note" > "$manifest"
-          echo "Generated manifest:"
-          cat "$manifest"
-
-          log="$RUNNER_TEMP/upload.log"
-          set +e
-          "$steamcmd" +login "$STEAM_USERNAME" +workshop_build_item "$manifest" +quit 2>&1 | tee "$log"
-          rc=${PIPESTATUS[0]}
-          set -e
-
-          # SteamCMD's exit code alone is not trustworthy, so require a success line too -
-          # a silent no-op would otherwise look like a published release.
-          if [ "$rc" -ne 0 ] || ! grep -qiE "Success|update successful" "$log"; then
-            echo "::error::Workshop upload failed (steamcmd exit $rc)"
-            for f in "$HOME/Steam/logs"/*.txt; do
-              [ -f "$f" ] || continue
-              echo "----- $f"
-              cat "$f"
-            done
-            exit 1
-          fi
+        uses: frenchua/steam-workshop-upload@v1
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: '294100'
+          publishedFileId: ${{ steps.stage.outputs.publishedFileId }}
+          path: staging
+          changeNote: ${{ inputs.changeNote || github.event.head_commit.message }}
