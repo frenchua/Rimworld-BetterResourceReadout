@@ -23,7 +23,11 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest (26.04) ships Docker 29.x, whose default seccomp profile
+    # blocks AF_ALG sockets, so the containerized SteamCMD in the deploy step below fails
+    # its bootstrap self-update with "Steamcmd needs to be online to update".
+    # See game-ci/steam-deploy#99. Back to ubuntu-latest once that is fixed upstream.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
